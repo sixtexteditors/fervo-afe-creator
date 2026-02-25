@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fervo Energy — AFE Creator</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useCallback, useEffect, useRef } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
+
+/* ─────────────────────────────────────────────
+   CONSTANTS & HELPERS
+───────────────────────────────────────────── */
+const NAVY = "#1B2A4A";
+
+const fmtCurr = (n) => {
+  const num = parseFloat(n) || 0;
+  return "$" + num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const fmtDateCover = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${String(d.getDate()).padStart(2,"0")}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
+};
+
+const fmtDateAFE = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  return `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}/${d.getFullYear()}`;
+};
+
+/* ─────────────────────────────────────────────
+   DEFAULT STATE
+───────────────────────────────────────────── */
+const defaultCover = {
+  phaseTitle: "Phase 2",
+  originatorName: "Evan Mallah",
+  date: "2026-02-13",
+  purpose: "QA/QC costs for Phase 2 equipment across power generation and power delivery equipment to support Facility 4 commissioning.",
+  purposeItems: [
+    "Initial pre-award inspection",
+    "Routine inspections during production",
+    "FAT",
+    ""
+  ],
+  bidders: [{ name: "", total: "", noBid: false }],
+  selectionJustification: "Not applicable",
+  nonCompBidExplanation: "Individual inspections will be comp. bid",
+  stageGateHeld: false,
+  stageGateNotes: "Stage gate part of award process. Inspection Test Plan (ITP) finalized at award.",
+  withinBudget: true,
+  budgetNotes: "AFE based on live Phase 2 budget. Will be adjusted as additional ITPs are developed for yet to be awarded equipment",
+  contingencyPct: "0",
+  contingencyExplanation: "",
+  paymentTerms: "Variable",
+  milestones: [
+    { name: "Initial pre-award inspection", percent: "15", value: "N/A - equip. dependent", comment: "Variable depending on equipment supplier" }
+  ]
+};
+
+const defaultFac = {
+  afeName: "Phase 2 QA_QC",
+  date: "2026-02-13",
+  facility: "",
+  prospect: "Cape",
+  county: "Beaver",
+  state: "UT",
+  objective: "",
+  lineItems: [
+    { costCode: "1634-50", description: "ACCs", qty: "N/A (service)", totalCost: "150000" },
+    { costCode: "1634-50", description: "SCWs", qty: "N/A (service)", totalCost: "100000" },
+    { costCode: "1640-50", description: "Power Delivery", qty: "N/A (service)", totalCost: "80000" }
+  ],
+  contingencyAmount: "0",
+  notes: "AFE submitted to enable engineers to begin Facility 4 equipment inspections. Intent to revise AFE based on equipment-specific ITPs. Target revision end of February. +/- 25% estimate."
+};
+
+const defaultCfManual = [
+  { month: "Mar", year: "2026", pct: "11" },
+  { month: "Apr", year: "2026", pct: "15" },
+  { month: "May", year: "2026", pct: "20" },
+  { month: "Jun", year: "2026", pct: "25" },
+  { month: "Jul", year: "2026", pct: "15" },
+  { month: "Aug", year: "2026", pct: "14" }
+];
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const YEARS = Array.from({ length: 11 }, (_, i) => String(2025 + i));
+
+/* ─────────────────────────────────────────────
+   SHARED UI COMPONENTS
+───────────────────────────────────────────── */
+const SectionHeader = ({ title }) => (
+  <div className="text-white text-sm font-bold px-3 py-2 mb-2 uppercase tracking-wide"
+    style={{ backgroundColor: NAVY }}>
+    {title}
+  </div>
+);
+
+const InputField = ({ label, value, onChange, type = "text", placeholder = "" }) => (
+  <div className="mb-3">
+    <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+    <input type={type} value={value} onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+  </div>
+);
+
+const TextareaField = ({ label, value, onChange, rows = 3, placeholder = "" }) => (
+  <div className="mb-3">
+    <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
+    <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows}
+      placeholder={placeholder}
+      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+  </div>
+);
+
+const CheckboxField = ({ label, checked, onChange }) => (
+  <label className="flex items-center gap-2 text-sm cursor-pointer mb-2">
+    <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="w-4 h-4 rounded" />
+    <span>{label}</span>
+  </label>
+);
+
+/* ─────────────────────────────────────────────
+   STEP INDICATOR
+───────────────────────────────────────────── */
+const STEPS = ["Cover Page", "Facilities AFE", "Cash Flow", "Preview & Export"];
+
+const StepIndicator = ({ current }) => (
+  <div className="flex items-center justify-center gap-0 mb-8 no-print">
+    {STEPS.map((s, i) => (
+      <div key={i} className="flex items-center">
+        <div className="flex flex-col items-center">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2"
+            style={{ backgroundColor: i <= current ? NAVY : "white", borderColor: i <= current ? NAVY : "#d1d5db", color: i <= current ? "white" : "#9ca3af" }}>
+            {i + 1}
+          </div>
+          <span className="text-xs mt-1 font-medium whitespace-nowrap"
+            style={{ color: i <= current ? NAVY : "#9ca3af" }}>{s}</span>
+        </div>
+        {i < STEPS.length - 1 && (
+          <div className="w-14 h-0.5 mx-1 mb-4"
+            style={{ backgroundColor: i < current ? NAVY : "#d1d5db" }} />
+        )}
+      </div>
+    ))}
+  </div>
+);
+
+/* ─────────────────────────────────────────────
+   COVER PAGE FORM (STEP 0)
+───────────────────────────────────────────── */
+const CoverPageForm = ({ cover, setCover }) => {
+  const upd = (k, v) => setCover(p => ({ ...p, [k]: v }));
+  const updatePI = (i, v) => { const a = [...cover.purposeItems]; a[i] = v; upd("purposeItems", a); };
+  const updateBidder = (i, k, v) => { const a = [...cover.bidders]; a[i] = { ...a[i], [k]: v }; upd("bidders", a); };
+  const updateMS = (i, k, v) => { const a = [...cover.milestones]; a[i] = { ...a[i], [k]: v }; upd("milestones", a); };
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader title="Header" />
+      <div className="grid grid-cols-3 gap-3 px-1">
+        <InputField label="Phase / Title" value={cover.phaseTitle} onChange={v => upd("phaseTitle", v)} />
+        <InputField label="Originator Name" value={cover.originatorName} onChange={v => upd("originatorName", v)} />
+        <InputField label="Date" value={cover.date} onChange={v => upd("date", v)} type="date" />
+      </div>
+
+      <SectionHeader title="Purpose" />
+      <div className="px-1">
+        <TextareaField label="Purpose Description" value={cover.purpose} onChange={v => upd("purpose", v)} rows={3} />
+        <label className="block text-xs font-semibold text-gray-600 mb-2">Purpose Line Items</label>
+        {cover.purposeItems.map((item, i) => (
+          <div key={i} className="flex gap-2 mb-2">
+            <input value={item} onChange={e => updatePI(i, e.target.value)} placeholder={`Line item ${i + 1}`}
+              className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            {cover.purposeItems.length > 1 && (
+              <button onClick={() => upd("purposeItems", cover.purposeItems.filter((_, idx) => idx !== i))}
+                className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+            )}
+          </div>
+        ))}
+        <button onClick={() => upd("purposeItems", [...cover.purposeItems, ""])}
+          className="text-xs px-3 py-1 rounded border mt-1" style={{ borderColor: NAVY, color: NAVY }}>
+          + Add Line Item
+        </button>
+      </div>
+
+      <SectionHeader title="Competitive Bids" />
+      <div className="px-1">
+        <table className="w-full text-sm mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              {["Bidder Name", "Total ($)", "No Bid", ""].map((h, i) => (
+                <th key={i} className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cover.bidders.map((b, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                <td className="px-1 py-1">
+                  <input value={b.name} onChange={e => updateBidder(i, "name", e.target.value)}
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                </td>
+                <td className="px-1 py-1">
+                  <input value={b.total} onChange={e => updateBidder(i, "total", e.target.value)} type="number"
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                </td>
+                <td className="px-2 py-1 text-center">
+                  <input type="checkbox" checked={b.noBid} onChange={e => updateBidder(i, "noBid", e.target.checked)} />
+                </td>
+                <td className="px-1 py-1">
+                  {cover.bidders.length > 1 && (
+                    <button onClick={() => upd("bidders", cover.bidders.filter((_, idx) => idx !== i))}
+                      className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {cover.bidders.length < 5 && (
+          <button onClick={() => upd("bidders", [...cover.bidders, { name: "", total: "", noBid: false }])}
+            className="text-xs px-3 py-1 rounded border mb-3" style={{ borderColor: NAVY, color: NAVY }}>
+            + Add Bidder
+          </button>
+        )}
+        <TextareaField label="Selection Justification" value={cover.selectionJustification} onChange={v => upd("selectionJustification", v)} rows={2} />
+        <TextareaField label="If Not Competitively Bid, Explain" value={cover.nonCompBidExplanation} onChange={v => upd("nonCompBidExplanation", v)} rows={2} />
+      </div>
+
+      <SectionHeader title="Diligence" />
+      <div className="px-1">
+        <div className="grid grid-cols-2 gap-4 mb-3">
+          <div>
+            <CheckboxField label="Stage Gate held?" checked={cover.stageGateHeld} onChange={v => upd("stageGateHeld", v)} />
+            <TextareaField label="Stage Gate Notes (if not held, explain)" value={cover.stageGateNotes} onChange={v => upd("stageGateNotes", v)} rows={2} />
+          </div>
+          <div>
+            <CheckboxField label="Within budget?" checked={cover.withinBudget} onChange={v => upd("withinBudget", v)} />
+            <TextareaField label="Budget Notes (if over budget, explain)" value={cover.budgetNotes} onChange={v => upd("budgetNotes", v)} rows={2} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <InputField label="Total Contingency %" value={cover.contingencyPct} onChange={v => upd("contingencyPct", v)} type="number" placeholder="0" />
+          <div className="mb-3">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Terms</label>
+            <select value={cover.paymentTerms} onChange={e => upd("paymentTerms", e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+              <option value="Fixed">Fixed</option>
+              <option value="Variable">Variable</option>
+            </select>
+          </div>
+        </div>
+        <TextareaField label="Contingency Explanation" value={cover.contingencyExplanation} onChange={v => upd("contingencyExplanation", v)} rows={2} />
+      </div>
+
+      <SectionHeader title="Payment Milestones (Bid Line Items)" />
+      <div className="px-1">
+        <table className="w-full text-sm mb-2">
+          <thead>
+            <tr className="bg-gray-100">
+              {["Milestone Name", "% Payment", "Value", "Comment", ""].map((h, i) => (
+                <th key={i} className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cover.milestones.map((m, i) => (
+              <tr key={i} className="border-b border-gray-100">
+                {["name", "percent", "value", "comment"].map(k => (
+                  <td key={k} className="px-1 py-1">
+                    <input value={m[k]} onChange={e => updateMS(i, k, e.target.value)}
+                      type={k === "percent" ? "number" : "text"}
+                      className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                  </td>
+                ))}
+                <td className="px-1 py-1">
+                  {cover.milestones.length > 1 && (
+                    <button onClick={() => upd("milestones", cover.milestones.filter((_, idx) => idx !== i))}
+                      className="text-red-400 text-xs">✕</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button onClick={() => upd("milestones", [...cover.milestones, { name: "", percent: "", value: "", comment: "" }])}
+          className="text-xs px-3 py-1 rounded border" style={{ borderColor: NAVY, color: NAVY }}>
+          + Add Milestone
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   FACILITIES AFE FORM (STEP 1)
+───────────────────────────────────────────── */
+const FacilitiesForm = ({ fac, setFac, subtotal, contingencyAmt, totalCost }) => {
+  const upd = (k, v) => setFac(p => ({ ...p, [k]: v }));
+  const updateLI = (i, k, v) => { const a = [...fac.lineItems]; a[i] = { ...a[i], [k]: v }; upd("lineItems", a); };
+  const addLI = () => upd("lineItems", [...fac.lineItems, { costCode: "", description: "", qty: "", totalCost: "" }]);
+  const removeLI = (i) => upd("lineItems", fac.lineItems.filter((_, idx) => idx !== i));
+
+  const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader title="AFE Header Information" />
+      <div className="grid grid-cols-3 gap-3 px-1">
+        <InputField label="AFE Number / Name" value={fac.afeName} onChange={v => upd("afeName", v)} />
+        <InputField label="Date" value={fac.date} onChange={v => upd("date", v)} type="date" />
+        <InputField label="Facility" value={fac.facility} onChange={v => upd("facility", v)} />
+        <InputField label="Prospect" value={fac.prospect} onChange={v => upd("prospect", v)} />
+        <InputField label="County" value={fac.county} onChange={v => upd("county", v)} />
+        <div className="mb-3">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">State</label>
+          <select value={fac.state} onChange={e => upd("state", e.target.value)}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none">
+            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="px-1">
+        <InputField label="Objective" value={fac.objective} onChange={v => upd("objective", v)} placeholder="Describe the AFE objective..." />
+      </div>
+
+      <SectionHeader title="Cost Line Items" />
+      <div className="px-1">
+        <table className="w-full text-sm mb-2">
+          <thead>
+            <tr style={{ backgroundColor: NAVY }}>
+              {["Cost Code", "Description", "Qty", "Total Cost ($)", ""].map((h, i) => (
+                <th key={i} className="text-left px-2 py-1.5 text-xs font-semibold text-white">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {fac.lineItems.map((li, i) => (
+              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                <td className="px-1 py-1 w-28">
+                  <input value={li.costCode} onChange={e => updateLI(i, "costCode", e.target.value)}
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                </td>
+                <td className="px-1 py-1">
+                  <input value={li.description} onChange={e => updateLI(i, "description", e.target.value)}
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                </td>
+                <td className="px-1 py-1 w-32">
+                  <input value={li.qty} onChange={e => updateLI(i, "qty", e.target.value)}
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none" />
+                </td>
+                <td className="px-1 py-1 w-36">
+                  <input value={li.totalCost} onChange={e => updateLI(i, "totalCost", e.target.value)}
+                    type="number" className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none text-right" />
+                </td>
+                <td className="px-1 py-1 w-8">
+                  {fac.lineItems.length > 1 && (
+                    <button onClick={() => removeLI(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button onClick={addLI} className="text-xs px-3 py-1 rounded border mb-4"
+          style={{ borderColor: NAVY, color: NAVY }}>+ Add Line Item</button>
+
+        <div className="border border-gray-300 rounded overflow-hidden">
+          {[
+            { label: "SUBTOTAL", value: subtotal, bold: true, bg: "#f3f4f6" },
+            { label: "Contingency", value: null, isInput: true, bold: false, bg: "white" },
+            { label: "TOTAL ESTIMATED COSTS", value: totalCost, bold: true, bg: "#e8edf5" }
+          ].map((row, i) => (
+            <div key={i} className="flex items-center border-b border-gray-200 last:border-b-0 px-3 py-2"
+              style={{ backgroundColor: row.bg }}>
+              <span className={`flex-1 text-sm ${row.bold ? "font-bold" : ""}`}
+                style={{ color: row.bold ? NAVY : "inherit" }}>{row.label}</span>
+              {row.isInput ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">$</span>
+                  <input value={fac.contingencyAmount} onChange={e => upd("contingencyAmount", e.target.value)}
+                    type="number" placeholder="0"
+                    className="w-36 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:outline-none" />
+                </div>
+              ) : (
+                <span className={`text-sm font-mono ${row.bold ? "font-bold" : ""}`}
+                  style={{ color: row.bold ? NAVY : "inherit" }}>{fmtCurr(row.value)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <SectionHeader title="Notes" />
+      <div className="px-1">
+        <TextareaField label="Notes" value={fac.notes} onChange={v => upd("notes", v)} rows={4}
+          placeholder="Enter any notes or assumptions about this AFE..." />
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   CASH FLOW CHART COMPONENT
+───────────────────────────────────────────── */
+const CashFlowChart = ({ data, title = "Cumulative QA/QC Spend", compact = false }) => {
+  const maxVal = data.length > 0 ? Math.max(...data.map(d => d.cumulative || 0)) : 0;
+
+  const formatY = (v) => {
+    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
+    return `$${v}`;
+  };
+
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-40 bg-gray-50 rounded border border-dashed border-gray-300">
+        <p className="text-gray-400 text-sm">No cash flow data to display</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={compact ? "" : "bg-white border border-gray-200 rounded p-4"}>
+      <h3 className="text-sm font-bold text-center mb-3" style={{ color: NAVY }}>{title}</h3>
+      <ResponsiveContainer width="100%" height={compact ? 180 : 260}>
+        <LineChart data={data} margin={{ top: 5, right: 40, left: 10, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="month" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={45} />
+          <YAxis tickFormatter={formatY} tick={{ fontSize: 10 }} width={65} domain={[0, maxVal * 1.1]} />
+          <Tooltip formatter={(v, name) => [fmtCurr(v), name === "cumulative" ? "Cumulative" : "Monthly"]}
+            labelStyle={{ fontWeight: "bold" }} />
+          <Line type="monotone" dataKey="cumulative" stroke={NAVY} strokeWidth={2.5}
+            dot={{ fill: NAVY, r: 3 }} name="Cumulative Spend" />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   CASH FLOW FORM (STEP 2)
+───────────────────────────────────────────── */
+const CashFlowForm = ({
+  method, setMethod, cfManual, setCfManual, assumptions, setAssumptions,
+  cfImageUrl, setCfImageUrl, totalCost, chartData
+}) => {
+  const fileRef = useRef(null);
+  const manualSum = cfManual.reduce((s, m) => s + parseFloat(m.pct || 0), 0);
+  const sumOk = Math.abs(manualSum - 100) < 0.01;
+
+  const updateRow = (i, k, v) => {
+    const a = [...cfManual]; a[i] = { ...a[i], [k]: v }; setCfManual(a);
+  };
+  const addRow = () => setCfManual([...cfManual, { month: "Jan", year: "2026", pct: "" }]);
+  const removeRow = (i) => setCfManual(cfManual.filter((_, idx) => idx !== i));
+
+  const handleImageUpload = useCallback((file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setCfImageUrl(e.target.result);
+    reader.readAsDataURL(file);
+  }, [setCfImageUrl]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+        {[["manual", "Option A: Manual % Schedule"], ["image", "Option B: Upload Screenshot"]].map(([val, label]) => (
+          <button key={val} onClick={() => setMethod(val)}
+            className="px-4 py-2 rounded-md text-sm font-medium transition-all"
+            style={{ backgroundColor: method === val ? NAVY : "transparent", color: method === val ? "white" : "#4b5563" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {method === "manual" && (
+        <div>
+          <SectionHeader title="Option A: Manual Percentage Schedule" />
+          <div className="px-1">
+            <p className="text-xs text-gray-500 mb-3">
+              Assign % of total spend to each month. Percentages must sum to 100%.
+              Total Estimated Cost: <strong>{fmtCurr(totalCost)}</strong>
+            </p>
+            <table className="w-full text-sm mb-2">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">Month</th>
+                  <th className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">Year</th>
+                  <th className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">% of Total</th>
+                  <th className="text-left px-2 py-1.5 text-xs font-semibold text-gray-600">$ Amount</th>
+                  <th className="px-2 py-1.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cfManual.map((row, i) => {
+                  const monthly = (parseFloat(row.pct || 0) / 100) * totalCost;
+                  return (
+                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-1 py-1">
+                        <select value={row.month} onChange={e => updateRow(i, "month", e.target.value)}
+                          className="border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none bg-white">
+                          {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-1 py-1">
+                        <select value={row.year} onChange={e => updateRow(i, "year", e.target.value)}
+                          className="border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none bg-white">
+                          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-1 py-1">
+                        <div className="flex items-center gap-1">
+                          <input value={row.pct} onChange={e => updateRow(i, "pct", e.target.value)}
+                            type="number" min="0" max="100"
+                            className="w-20 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none" />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1 text-sm font-mono text-gray-700">{fmtCurr(monthly)}</td>
+                      <td className="px-1 py-1">
+                        {cfManual.length > 1 && (
+                          <button onClick={() => removeRow(i)} className="text-red-400 text-xs">✕</button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: sumOk ? "#dcfce7" : "#fef2f2" }}>
+                  <td colSpan={2} className="px-2 py-1.5 text-sm font-bold">TOTAL</td>
+                  <td className="px-2 py-1.5 text-sm font-bold font-mono">{manualSum.toFixed(1)}%</td>
+                  <td className="px-2 py-1.5 text-sm font-bold font-mono">{fmtCurr(totalCost)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+            {!sumOk && (
+              <p className="text-xs text-red-500 mb-2">⚠ Percentages sum to {manualSum.toFixed(1)}% — must equal 100%</p>
+            )}
+            <button onClick={addRow} className="text-xs px-3 py-1 rounded border mb-4"
+              style={{ borderColor: NAVY, color: NAVY }}>+ Add Month</button>
+            <TextareaField label="Cash Flow Assumptions (required)" value={assumptions}
+              onChange={setAssumptions} rows={3}
+              placeholder="e.g. Assumes 60% of spend is incurred 60 days prior to delivery based on latest schedule..." />
+          </div>
+        </div>
+      )}
+
+      {method === "image" && (
+        <div>
+          <SectionHeader title="Option B: Upload Cash Flow Screenshot" />
+          <div className="px-1">
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-800">
+              <strong>How it works:</strong> Take a screenshot of your Excel cash flow schedule and upload it here.
+              The image will be embedded directly into Page 3 of the PDF — no parsing needed.
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Upload Screenshot (PNG, JPG, GIF, WebP)</label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 transition-colors"
+                onClick={() => fileRef.current && fileRef.current.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleImageUpload(f); }}>
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { if (e.target.files[0]) handleImageUpload(e.target.files[0]); }} />
+                {cfImageUrl ? (
+                  <div>
+                    <img src={cfImageUrl} alt="Cash flow preview"
+                      className="max-h-48 mx-auto rounded shadow mb-2 object-contain" />
+                    <p className="text-xs text-green-600 font-medium">✅ Image uploaded — click to replace</p>
+                  </div>
+                ) : (
+                  <div className="text-gray-400">
+                    <div className="text-3xl mb-2">🖼️</div>
+                    <p className="text-sm font-medium">Drop screenshot here or click to browse</p>
+                    <p className="text-xs mt-1">PNG, JPG, GIF, WebP accepted</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <TextareaField label="Cash Flow Assumptions (required)" value={assumptions}
+              onChange={setAssumptions} rows={3}
+              placeholder="e.g. Cash flow based on equipment supplier schedules..." />
+          </div>
+        </div>
+      )}
+
+      {method === "manual" && chartData.length > 0 && (
+        <div>
+          <SectionHeader title="Chart Preview" />
+          <div className="px-1"><CashFlowChart data={chartData} /></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────
+   PRINT/PDF COMPONENTS
+───────────────────────────────────────────── */
+const PrintCheckbox = ({ checked }) => (
+  <span style={{ display: "inline-block", width: 14, height: 14, border: "1.5px solid #333",
+    textAlign: "center", lineHeight: "12px", fontSize: 10, fontWeight: "bold",
+    marginRight: 4, verticalAlign: "middle" }}>
+    {checked ? "✓" : ""}
+  </span>
+);
+
+const PrintPage = ({ children }) => (
+  <div className="print-page" style={{
+    width: "100%", maxWidth: "8.5in", minHeight: "11in", padding: "0.5in",
+    backgroundColor: "white", fontFamily: "Arial, sans-serif", fontSize: "9pt",
+    pageBreakAfter: "always", boxSizing: "border-box", overflowX: "hidden",
+    wordBreak: "break-word", overflowWrap: "break-word"
+  }}>
+    {children}
+  </div>
+);
+
+const PrintSectionHeader = ({ title }) => (
+  <div style={{
+    backgroundColor: NAVY, color: "white", padding: "4px 8px",
+    fontSize: "9pt", fontWeight: "bold", textTransform: "uppercase",
+    letterSpacing: "0.5px", marginBottom: 6, marginTop: 12
+  }}>{title}</div>
+);
+
+const PrintCoverPage = ({ cover, chartData, totalCost }) => (
+  <PrintPage>
+    <div style={{ textAlign: "center", marginBottom: 16 }}>
+      <div style={{ fontSize: "18pt", fontWeight: "bold", color: NAVY, letterSpacing: 2 }}>FERVO ENERGY</div>
+      <div style={{ fontSize: "13pt", fontWeight: "bold", color: NAVY, marginTop: 4 }}>AFE — {cover.phaseTitle}</div>
+      <div style={{ fontSize: "9pt", color: "#555", marginTop: 4 }}>
+        Originator: {cover.originatorName} &nbsp;|&nbsp; Date: {fmtDateCover(cover.date)}
+      </div>
+    </div>
+
+    <PrintSectionHeader title="Purpose" />
+    <div style={{ marginBottom: 6, fontSize: "8.5pt" }}>{cover.purpose}</div>
+    {cover.purposeItems.filter(Boolean).map((item, i) => (
+      <div key={i} style={{ fontSize: "8.5pt", marginLeft: 12, marginBottom: 2 }}>• {item}</div>
+    ))}
+
+    <PrintSectionHeader title="Competitive Bids" />
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", marginBottom: 8 }}>
+      <thead>
+        <tr style={{ backgroundColor: "#e8edf5" }}>
+          {["Bidder Name", "Total Bid", "No Bid"].map(h => (
+            <th key={h} style={{ border: "1px solid #ccc", padding: "3px 6px", textAlign: "left" }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {cover.bidders.map((b, i) => (
+          <tr key={i}>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{b.name || "—"}</td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{b.total ? fmtCurr(b.total) : "—"}</td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px", textAlign: "center" }}>
+              <PrintCheckbox checked={b.noBid} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <div style={{ fontSize: "8.5pt", marginBottom: 2 }}><strong>Selection Justification:</strong> {cover.selectionJustification}</div>
+    <div style={{ fontSize: "8.5pt", marginBottom: 6 }}><strong>If Not Competitively Bid:</strong> {cover.nonCompBidExplanation}</div>
+
+    <PrintSectionHeader title="Diligence" />
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", marginBottom: 6 }}>
+      <tbody>
+        <tr>
+          <td style={{ width: "50%", verticalAlign: "top", paddingRight: 8 }}>
+            <div><PrintCheckbox checked={cover.stageGateHeld} /><strong>Stage Gate held?</strong></div>
+            <div style={{ marginLeft: 18, color: "#444" }}>{cover.stageGateNotes}</div>
+          </td>
+          <td style={{ width: "50%", verticalAlign: "top" }}>
+            <div><PrintCheckbox checked={cover.withinBudget} /><strong>Within budget?</strong></div>
+            <div style={{ marginLeft: 18, color: "#444" }}>{cover.budgetNotes}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style={{ paddingTop: 6, verticalAlign: "top" }}>
+            <div><strong>Total Contingency:</strong> {cover.contingencyPct}%</div>
+            {cover.contingencyExplanation && <div style={{ color: "#444" }}>{cover.contingencyExplanation}</div>}
+          </td>
+          <td style={{ paddingTop: 6, verticalAlign: "top" }}>
+            <div><strong>Payment Terms:</strong> {cover.paymentTerms}</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <PrintSectionHeader title="Bid Line Items — Payment Milestones" />
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", marginBottom: 10 }}>
+      <thead>
+        <tr style={{ backgroundColor: "#e8edf5" }}>
+          {["Milestone", "% Payment", "Value", "Comment"].map(h => (
+            <th key={h} style={{ border: "1px solid #ccc", padding: "3px 6px", textAlign: "left" }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {cover.milestones.map((m, i) => (
+          <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{m.name}</td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px", textAlign: "center" }}>{m.percent}%</td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{m.value}</td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{m.comment}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+
+    {chartData.length > 0 && (
+      <div>
+        <PrintSectionHeader title="Cumulative QA/QC Spend" />
+        <CashFlowChart data={chartData} compact={true} />
+      </div>
+    )}
+  </PrintPage>
+);
+
+const PrintFacilitiesPage = ({ cover, fac, subtotal, contingencyAmt, totalCost }) => (
+  <PrintPage>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, borderBottom: `3px solid ${NAVY}`, paddingBottom: 8 }}>
+      <div>
+        <div style={{ fontSize: "20pt", fontWeight: "bold", color: NAVY, letterSpacing: 3 }}>F E R V O</div>
+        <div style={{ fontSize: "10pt", color: NAVY, letterSpacing: 2 }}>E N E R G Y</div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: "12pt", fontWeight: "bold", color: NAVY }}>{fac.afeName || "Phase II QA_QC Plan"}</div>
+        <div style={{ fontSize: "10pt", color: "#555", marginTop: 2 }}>Authorization for Expenditure</div>
+      </div>
+    </div>
+
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "8.5pt", marginBottom: 12 }}>
+      <tbody>
+        <tr style={{ backgroundColor: "#e8edf5" }}>
+          {[["AFE Name", fac.afeName],["Date", fmtDateAFE(fac.date)],["Prospect", fac.prospect]].map(([k,v]) => (
+            <td key={k} style={{ border: "1px solid #ccc", padding: "4px 8px" }}>
+              <span style={{ fontWeight: "bold" }}>{k}:</span> {v}
+            </td>
+          ))}
+        </tr>
+        <tr>
+          {[["County", fac.county],["State", fac.state],["Facility", fac.facility || "—"]].map(([k,v]) => (
+            <td key={k} style={{ border: "1px solid #ccc", padding: "4px 8px" }}>
+              <span style={{ fontWeight: "bold" }}>{k}:</span> {v}
+            </td>
+          ))}
+        </tr>
+      </tbody>
+    </table>
+
+    {fac.objective && (
+      <div style={{ fontSize: "8.5pt", marginBottom: 10 }}>
+        <strong>Objective:</strong> {fac.objective}
+      </div>
+    )}
+
+    <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: "8pt", marginBottom: 0 }}>
+      <colgroup>
+        <col style={{ width: "14%" }} />
+        <col style={{ width: "44%" }} />
+        <col style={{ width: "18%" }} />
+        <col style={{ width: "24%" }} />
+      </colgroup>
+      <thead>
+        <tr style={{ backgroundColor: NAVY }}>
+          {[["Cost Code","left"],["Description","left"],["Qty","left"],["Total Cost","right"]].map(([h,align]) => (
+            <th key={h} style={{ color: "white", padding: "4px 6px", textAlign: align, border: "1px solid #2A3F6A" }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {fac.lineItems.map((li, i) => (
+          <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+            <td style={{ border: "1px solid #ddd", padding: "3px 6px", wordBreak: "break-word" }}>{li.costCode}</td>
+            <td style={{ border: "1px solid #ddd", padding: "3px 6px", wordBreak: "break-word" }}>{li.description}</td>
+            <td style={{ border: "1px solid #ddd", padding: "3px 6px", wordBreak: "break-word" }}>{li.qty}</td>
+            <td style={{ border: "1px solid #ddd", padding: "3px 6px", textAlign: "right", whiteSpace: "nowrap" }}>{fmtCurr(li.totalCost)}</td>
+          </tr>
+        ))}
+        <tr style={{ backgroundColor: "#f3f4f6" }}>
+          <td colSpan={3} style={{ border: "1px solid #ccc", padding: "3px 6px", fontWeight: "bold", color: NAVY }}>SUBTOTAL</td>
+          <td style={{ border: "1px solid #ccc", padding: "3px 6px", fontWeight: "bold", textAlign: "right", whiteSpace: "nowrap", color: NAVY }}>{fmtCurr(subtotal)}</td>
+        </tr>
+        <tr style={{ backgroundColor: "white" }}>
+          <td colSpan={3} style={{ border: "1px solid #ccc", padding: "3px 6px" }}>Contingency</td>
+          <td style={{ border: "1px solid #ccc", padding: "3px 6px", textAlign: "right", whiteSpace: "nowrap" }}>{fmtCurr(contingencyAmt)}</td>
+        </tr>
+        <tr style={{ backgroundColor: "#e8edf5" }}>
+          <td colSpan={3} style={{ border: "1px solid #ccc", padding: "4px 6px", fontWeight: "bold", color: NAVY }}>TOTAL ESTIMATED COSTS</td>
+          <td style={{ border: "1px solid #ccc", padding: "4px 6px", fontWeight: "bold", textAlign: "right", whiteSpace: "nowrap", color: NAVY }}>{fmtCurr(totalCost)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {fac.notes && (
+      <div style={{ marginTop: 8, fontSize: "8pt", border: "1px solid #ccc", padding: "5px 7px", backgroundColor: "#fffef0" }}>
+        <strong>Notes:</strong> {fac.notes}
+      </div>
+    )}
+
+    <div style={{ marginTop: 8, fontSize: "7.5pt", color: "#666", fontStyle: "italic", borderTop: "1px solid #ddd", paddingTop: 5 }}>
+      The costs shown on this AFE Form are estimates only.
+    </div>
+
+    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px" }}>
+      {["Initiator's Approval", "Manager Approval", "Director Approval (if required)", "ELT Approval (if required)"].map(label => (
+        <div key={label} style={{ borderTop: "1.5px solid #333", paddingTop: 4, fontSize: "7.5pt" }}>
+          <div style={{ fontWeight: "bold", marginBottom: 14 }}>{label}</div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Signature: ___________________</span>
+            <span>Date: _________</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  </PrintPage>
+);
+
+const PrintCashFlowPage = ({ cover, fac, method, cfManual, cfImageUrl, assumptions, chartData, totalCost }) => (
+  <PrintPage>
+    <div style={{ textAlign: "center", borderBottom: `3px solid ${NAVY}`, paddingBottom: 8, marginBottom: 12 }}>
+      <div style={{ fontSize: "14pt", fontWeight: "bold", color: NAVY }}>QA/QC Cash Flow Schedule</div>
+      <div style={{ fontSize: "9pt", color: "#555", marginTop: 4 }}>{cover.phaseTitle} — {fmtDateCover(cover.date)}</div>
+    </div>
+
+    {assumptions && (
+      <div style={{ fontSize: "8.5pt", marginBottom: 10, border: "1px solid #ccc", padding: "6px 8px", backgroundColor: "#f9f9f9" }}>
+        <strong>Assumptions:</strong> {assumptions}
+      </div>
+    )}
+
+    {method === "manual" && (
+      <div>
+        <div style={{ fontSize: "9pt", fontWeight: "bold", color: NAVY, marginBottom: 4 }}>Monthly Spend Schedule</div>
+        <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: "8.5pt", marginBottom: 12 }}>
+          <colgroup>
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "28%" }} />
+          </colgroup>
+          <thead>
+            <tr style={{ backgroundColor: NAVY }}>
+              {["Month", "% of Total", "Monthly Spend", "Cumulative Spend"].map(h => (
+                <th key={h} style={{ color: "white", padding: "4px 8px", textAlign: h.includes("Spend") ? "right" : "left" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {chartData.map((row, i) => (
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+                <td style={{ border: "1px solid #ddd", padding: "3px 8px" }}>{row.month}</td>
+                <td style={{ border: "1px solid #ddd", padding: "3px 8px", textAlign: "right" }}>{row.pct}%</td>
+                <td style={{ border: "1px solid #ddd", padding: "3px 8px", textAlign: "right", fontFamily: "monospace" }}>{fmtCurr(row.monthly)}</td>
+                <td style={{ border: "1px solid #ddd", padding: "3px 8px", textAlign: "right", fontFamily: "monospace" }}>{fmtCurr(row.cumulative)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ backgroundColor: "#e8edf5" }}>
+              <td colSpan={2} style={{ border: "1px solid #ccc", padding: "4px 8px", fontWeight: "bold", color: NAVY }}>TOTAL</td>
+              <td style={{ border: "1px solid #ccc", padding: "4px 8px", fontWeight: "bold", textAlign: "right", fontFamily: "monospace", color: NAVY }}>{fmtCurr(totalCost)}</td>
+              <td style={{ border: "1px solid #ccc", padding: "4px 8px", fontWeight: "bold", textAlign: "right", fontFamily: "monospace", color: NAVY }}>{fmtCurr(totalCost)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        {chartData.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <CashFlowChart data={chartData} compact={false} />
+          </div>
+        )}
+      </div>
+    )}
+
+    {method === "image" && cfImageUrl && (
+      <div style={{ textAlign: "center", marginTop: 8 }}>
+        <img src={cfImageUrl} alt="Cash Flow Schedule"
+          style={{ maxWidth: "100%", height: "auto", border: "1px solid #ddd", borderRadius: 4 }} />
+      </div>
+    )}
+    {method === "image" && !cfImageUrl && (
+      <div style={{ textAlign: "center", color: "#999", marginTop: 40, fontSize: "10pt" }}>
+        No cash flow image uploaded.
+      </div>
+    )}
+  </PrintPage>
+);
+
+/* ─────────────────────────────────────────────
+   PREVIEW SCREEN (STEP 3)
+───────────────────────────────────────────── */
+const PreviewScreen = ({ cover, fac, subtotal, contingencyAmt, totalCost, method, cfManual, cfImageUrl, assumptions, chartData, onPrint, pdfLoading }) => (
+  <div>
+    <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6 no-print">
+      <p className="text-sm text-blue-800 font-medium">
+        📄 Review your AFE below. When ready, click <strong>Download PDF</strong> to save a PDF file directly.
+      </p>
+    </div>
+    <div className="flex justify-center gap-3 mb-6 no-print">
+      <button onClick={onPrint} disabled={pdfLoading}
+        className="px-6 py-2.5 text-white rounded font-semibold text-sm shadow hover:shadow-md transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ backgroundColor: NAVY }}>
+        {pdfLoading ? "⏳ Generating PDF..." : "⬇️ Download PDF"}
+      </button>
+    </div>
+    <div className="space-y-4 preview-wrapper">
+      <div className="shadow-lg border border-gray-200 overflow-hidden" style={{ width: "100%", maxWidth: "8.5in", margin: "0 auto" }}>
+        <PrintCoverPage cover={cover} chartData={chartData} totalCost={totalCost} />
+      </div>
+      <div className="shadow-lg border border-gray-200 overflow-hidden" style={{ width: "100%", maxWidth: "8.5in", margin: "0 auto" }}>
+        <PrintFacilitiesPage cover={cover} fac={fac} subtotal={subtotal} contingencyAmt={contingencyAmt} totalCost={totalCost} />
+      </div>
+      <div className="shadow-lg border border-gray-200 overflow-hidden" style={{ width: "100%", maxWidth: "8.5in", margin: "0 auto" }}>
+        <PrintCashFlowPage cover={cover} fac={fac} method={method} cfManual={cfManual} cfImageUrl={cfImageUrl}
+          assumptions={assumptions} chartData={chartData} totalCost={totalCost} />
+      </div>
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────────
+   MAIN APP
+───────────────────────────────────────────── */
+function App() {
+  const [step, setStep] = useState(0);
+  const [cover, setCover] = useState(defaultCover);
+  const [fac, setFac] = useState(defaultFac);
+  const [cfMethod, setCfMethod] = useState("manual");
+  const [cfManual, setCfManual] = useState(defaultCfManual);
+  const [cfAssumptions, setCfAssumptions] = useState("Assumes 60% of spend is incurred 60 days prior to delivery based on latest Hargrove schedule");
+  const [cfImageUrl, setCfImageUrl] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const subtotal = useMemo(() =>
+    fac.lineItems.reduce((s, r) => s + parseFloat(r.totalCost || 0), 0), [fac.lineItems]);
+  const contingencyAmt = parseFloat(fac.contingencyAmount || 0);
+  const totalCost = subtotal + contingencyAmt;
+
+  const chartData = useMemo(() => {
+    if (cfMethod === "manual") {
+      let cum = 0;
+      return cfManual
+        .filter(m => m.month && m.year && parseFloat(m.pct || 0) > 0)
+        .map(m => {
+          const monthly = (parseFloat(m.pct || 0) / 100) * totalCost;
+          cum += monthly;
+          return { month: `${m.month} ${m.year}`, pct: m.pct, monthly, cumulative: cum };
+        });
+    }
+    return [];
+  }, [cfMethod, cfManual, totalCost]);
+
+  const canProceed = useMemo(() => {
+    if (step === 0) return cover.originatorName.trim() && cover.date;
+    if (step === 1) return fac.lineItems.length > 0 && fac.lineItems.some(li => parseFloat(li.totalCost) > 0);
+    if (step === 2) {
+      if (!cfAssumptions.trim()) return false;
+      if (cfMethod === "manual") {
+        const sum = cfManual.reduce((s, m) => s + parseFloat(m.pct || 0), 0);
+        return Math.abs(sum - 100) < 0.01;
+      }
+      if (cfMethod === "image") return !!cfImageUrl;
+      return false;
+    }
+    return true;
+  }, [step, cover, fac, cfMethod, cfManual, cfAssumptions, cfImageUrl]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    setPdfLoading(true);
+    try {
+      const loadScript = (src) => new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`) && window.jspdf && window.html2canvas) { resolve(); return; }
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) { existing.onload = resolve; existing.onerror = reject; return; }
+        const s = document.createElement("script");
+        s.src = src; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+
+      const { jsPDF } = window.jspdf;
+      const pages = document.querySelectorAll(".print-page");
+      if (!pages.length) { alert("No preview pages found."); return; }
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+      const PAGE_W_IN = 8.5;
+      const PAGE_PX = 816;
+
+      const offscreen = document.createElement("div");
+      offscreen.style.cssText = `position:fixed;top:-99999px;left:-99999px;width:${PAGE_PX}px;background:white;overflow:visible;`;
+      document.body.appendChild(offscreen);
+
+      try {
+        for (let i = 0; i < pages.length; i++) {
+          const clone = pages[i].cloneNode(true);
+          clone.style.width = `${PAGE_PX}px`;
+          clone.style.maxWidth = `${PAGE_PX}px`;
+          clone.style.boxSizing = "border-box";
+          clone.style.margin = "0";
+          clone.style.boxShadow = "none";
+          offscreen.innerHTML = "";
+          offscreen.appendChild(clone);
+          await new Promise(r => setTimeout(r, 50));
+          const canvas = await window.html2canvas(clone, {
+            scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff",
+            width: PAGE_PX, height: clone.scrollHeight,
+            windowWidth: PAGE_PX, windowHeight: clone.scrollHeight,
+          });
+          const imgData = canvas.toDataURL("image/jpeg", 0.97);
+          const pageH = (canvas.height / canvas.width) * PAGE_W_IN;
+          if (i > 0) pdf.addPage([PAGE_W_IN, pageH], "portrait");
+          pdf.addImage(imgData, "JPEG", 0, 0, PAGE_W_IN, pageH);
+        }
+      } finally {
+        document.body.removeChild(offscreen);
+      }
+
+      const filename = `Fervo_AFE_${cover.phaseTitle || "Draft"}.pdf`;
+      const blob = pdf.output("blob");
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl; a.download = filename; a.style.display = "none";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err) {
+      alert("PDF generation failed: " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [cover.phaseTitle]);
+
+  const navBtn = (label, onClick, disabled = false, variant = "primary") => {
+    const styles = variant === "primary"
+      ? { backgroundColor: disabled ? "#9ca3af" : NAVY, color: "white" }
+      : { backgroundColor: "white", color: NAVY, border: `1.5px solid ${NAVY}` };
+    return (
+      <button onClick={onClick} disabled={disabled}
+        className="px-5 py-2 rounded text-sm font-semibold transition-all hover:opacity-90 disabled:cursor-not-allowed"
+        style={styles}>{label}</button>
+    );
+  };
+
+  const stepContent = [
+    <CoverPageForm cover={cover} setCover={setCover} />,
+    <FacilitiesForm fac={fac} setFac={setFac} subtotal={subtotal} contingencyAmt={contingencyAmt} totalCost={totalCost} />,
+    <CashFlowForm method={cfMethod} setMethod={setCfMethod} cfManual={cfManual} setCfManual={setCfManual}
+      assumptions={cfAssumptions} setAssumptions={setCfAssumptions} cfImageUrl={cfImageUrl}
+      setCfImageUrl={setCfImageUrl} totalCost={totalCost} chartData={chartData} />,
+    <PreviewScreen cover={cover} fac={fac} subtotal={subtotal} contingencyAmt={contingencyAmt}
+      totalCost={totalCost} method={cfMethod} cfManual={cfManual} cfImageUrl={cfImageUrl}
+      assumptions={cfAssumptions} chartData={chartData} onPrint={handleDownloadPDF} pdfLoading={pdfLoading} />
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-100" style={{ fontFamily: "Arial, sans-serif" }}>
+      <div className="no-print text-white py-4 px-6 shadow-lg" style={{ backgroundColor: NAVY }}>
+        <div className="max-w-4xl mx-auto flex items-center gap-4">
+          <div>
+            <div className="text-lg font-bold tracking-widest">F E R V O &nbsp; E N E R G Y</div>
+            <div className="text-xs opacity-80 tracking-wider">AUTHORIZATION FOR EXPENDITURE CREATOR</div>
+          </div>
+          <div className="ml-auto text-xs opacity-70">
+            Total Estimated Cost: <span className="font-bold text-base opacity-100">{fmtCurr(totalCost)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="no-print"><StepIndicator current={step} /></div>
+        <div className="bg-white rounded-lg shadow p-6 mb-6 no-print">
+          <h2 className="text-base font-bold mb-5 pb-2 border-b" style={{ color: NAVY }}>
+            Step {step + 1}: {STEPS[step]}
+          </h2>
+          {stepContent[step]}
+        </div>
+        <div className="flex justify-between items-center no-print">
+          <div>
+            {step > 0 && navBtn("← Back", () => setStep(s => s - 1), false, "secondary")}
+          </div>
+          <div className="flex items-center gap-3">
+            {!canProceed && step < 3 && (
+              <span className="text-xs text-amber-600">
+                {step === 2 && cfMethod === "manual" && "Percentages must sum to 100%"}
+                {step === 2 && !cfAssumptions.trim() && "Assumptions are required"}
+                {step === 0 && !cover.originatorName.trim() && "Originator name required"}
+              </span>
+            )}
+            {step < 3 && navBtn(
+              step === 2 ? "Preview AFE →" : "Next →",
+              () => setStep(s => s + 1),
+              !canProceed
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
