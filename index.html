@@ -24,7 +24,7 @@
 /* ─────────────────────────────────────────────
    CONSTANTS & HELPERS
 ───────────────────────────────────────────── */
-const NAVY = "#1B2A4A";
+const NAVY = "#1C2353";
 
 const fmtCurr = (n) => {
   const num = parseFloat(n) || 0;
@@ -48,56 +48,42 @@ const fmtDateAFE = (dateStr) => {
    DEFAULT STATE
 ───────────────────────────────────────────── */
 const defaultCover = {
-  phaseTitle: "Phase 2",
-  originatorName: "Evan Mallah",
-  date: "2026-02-13",
-  purpose: "QA/QC costs for Phase 2 equipment across power generation and power delivery equipment to support Facility 4 commissioning.",
-  purposeItems: [
-    "Initial pre-award inspection",
-    "Routine inspections during production",
-    "FAT",
-    ""
-  ],
+  phaseTitle: "",
+  originatorName: "",
+  date: "",
+  purpose: "",
+  purposeItems: [""],
   bidders: [{ name: "", total: "", noBid: false }],
-  selectionJustification: "Not applicable",
-  nonCompBidExplanation: "Individual inspections will be comp. bid",
+  selectionJustification: "",
+  nonCompBidExplanation: "",
   stageGateHeld: false,
-  stageGateNotes: "Stage gate part of award process. Inspection Test Plan (ITP) finalized at award.",
-  withinBudget: true,
-  budgetNotes: "AFE based on live Phase 2 budget. Will be adjusted as additional ITPs are developed for yet to be awarded equipment",
+  stageGateNotes: "",
+  withinBudget: false,
+  budgetNotes: "",
   contingencyPct: "0",
   contingencyExplanation: "",
-  paymentTerms: "Variable",
+  paymentTerms: "",
   milestones: [
-    { name: "Initial pre-award inspection", percent: "15", value: "N/A - equip. dependent", comment: "Variable depending on equipment supplier" }
+    { name: "", percent: "", value: "", comment: "" }
   ]
 };
 
 const defaultFac = {
-  afeName: "Phase 2 QA_QC",
-  date: "2026-02-13",
+  afeName: "",
+  date: "",
   facility: "",
-  prospect: "Cape",
-  county: "Beaver",
-  state: "UT",
+  prospect: "",
+  county: "",
+  state: "",
   objective: "",
   lineItems: [
-    { costCode: "1634-50", description: "ACCs", qty: "N/A (service)", totalCost: "150000" },
-    { costCode: "1634-50", description: "SCWs", qty: "N/A (service)", totalCost: "100000" },
-    { costCode: "1640-50", description: "Power Delivery", qty: "N/A (service)", totalCost: "80000" }
+    { costCode: "", description: "", qty: "", totalCost: "" }
   ],
   contingencyAmount: "0",
-  notes: "AFE submitted to enable engineers to begin Facility 4 equipment inspections. Intent to revise AFE based on equipment-specific ITPs. Target revision end of February. +/- 25% estimate."
+  notes: ""
 };
 
-const defaultCfManual = [
-  { month: "Mar", year: "2026", pct: "11" },
-  { month: "Apr", year: "2026", pct: "15" },
-  { month: "May", year: "2026", pct: "20" },
-  { month: "Jun", year: "2026", pct: "25" },
-  { month: "Jul", year: "2026", pct: "15" },
-  { month: "Aug", year: "2026", pct: "14" }
-];
+const defaultCfManual = [];
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const YEARS = Array.from({ length: 11 }, (_, i) => String(2025 + i));
@@ -648,7 +634,7 @@ const PrintSectionHeader = ({ title }) => (
 const PrintCoverPage = ({ cover, chartData, totalCost }) => (
   <PrintPage>
     <div style={{ textAlign: "center", marginBottom: 16 }}>
-      <div style={{ fontSize: "18pt", fontWeight: "bold", color: NAVY, letterSpacing: 2 }}>FERVO ENERGY</div>
+      <img src="https://fervoenergy.com/wp-content/uploads/2022/08/Fervo-logo-primary-768x166.png" alt="Fervo Energy" style={{ height: "48px", objectFit: "contain", marginBottom: 4 }} />
       <div style={{ fontSize: "13pt", fontWeight: "bold", color: NAVY, marginTop: 4 }}>AFE — {cover.phaseTitle}</div>
       <div style={{ fontSize: "9pt", color: "#555", marginTop: 4 }}>
         Originator: {cover.originatorName} &nbsp;|&nbsp; Date: {fmtDateCover(cover.date)}
@@ -1081,8 +1067,8 @@ function App() {
       <div className="no-print text-white py-4 px-6 shadow-lg" style={{ backgroundColor: NAVY }}>
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <div>
-            <div className="text-lg font-bold tracking-widest">F E R V O &nbsp; E N E R G Y</div>
-            <div className="text-xs opacity-80 tracking-wider">AUTHORIZATION FOR EXPENDITURE CREATOR</div>
+            <img src="https://fervoenergy.com/wp-content/uploads/2022/08/Fervo-logo-primary-white-768x166.png" alt="Fervo Energy" style={{ height: "38px", objectFit: "contain" }} />
+            <div className="text-xs opacity-80 tracking-wider mt-1">AUTHORIZATION FOR EXPENDITURE CREATOR</div>
           </div>
           <div className="ml-auto text-xs opacity-70">
             Total Estimated Cost: <span className="font-bold text-base opacity-100">{fmtCurr(totalCost)}</span>

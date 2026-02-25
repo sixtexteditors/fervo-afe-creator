@@ -1,1 +1,1 @@
-Fix: add prop-types CDN for Recharts  
+Update logo, brand color, clear default fields  
